@@ -227,7 +227,8 @@ static NSString *const MDVSaveMessageHandlerName = @"mdvSaveBridge";
     self.window.representedURL = standardURL;
     [[NSDocumentController sharedDocumentController] noteNewRecentDocumentURL:standardURL];
 
-    [self.webView loadFileURL:previewURL allowingReadAccessToURL:[NSURL fileURLWithPath:@"/"]];
+    NSURL *previewDirectoryURL = previewURL.URLByDeletingLastPathComponent ?: previewURL;
+    [self.webView loadFileURL:previewURL allowingReadAccessToURL:previewDirectoryURL];
 
     if (fileChanged || !self.fileWatchStream) {
         [self startWatchingSourceFile];
@@ -597,6 +598,17 @@ static void MDVFSEventCallback(ConstFSEventStreamRef streamRef,
         return;
     }
 
+    NSString *scheme = url.scheme.lowercaseString;
+    NSSet<NSString *> *allowedSchemes = [NSSet setWithObjects:@"http", @"https", @"mailto", nil];
+    if (![allowedSchemes containsObject:scheme]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Blocked link";
+        alert.informativeText = [NSString stringWithFormat:@"Markdown Viewer blocked a link with the %@ URL scheme.", scheme ?: @"unknown"];
+        [alert addButtonWithTitle:@"OK"];
+        [alert runModal];
+        return;
+    }
+
     [[NSWorkspace sharedWorkspace] openURL:url];
 }
 
@@ -661,6 +673,10 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
                                                 keyEquivalent:@""];
     aboutItem.target = NSApp;
     [appMenu addItem:aboutItem];
+    [appMenu addItem:[self menuItemWithTitle:@"Check for Updates..."
+                                      action:@selector(checkForUpdates:)
+                                keyEquivalent:@""
+                            modifierMask:NSEventModifierFlagCommand]];
     [appMenu addItem:[NSMenuItem separatorItem]];
 
     NSMenuItem *hideItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"Hide %@", appName]
@@ -816,10 +832,9 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     if (!self.openedFileDuringLaunch) {
         [self openDocument:nil];
     }
-    [self checkForUpdates];
 }
 
-- (void)checkForUpdates {
+- (void)checkForUpdates:(id)sender {
     NSString *currentVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"0.0.0";
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:MDVReleasesURL]];
@@ -1029,7 +1044,7 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
 
-    if (action == @selector(openDocument:)) {
+    if (action == @selector(openDocument:) || action == @selector(checkForUpdates:)) {
         return YES;
     }
 

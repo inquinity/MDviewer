@@ -54,6 +54,20 @@ require_command() {
     fi
 }
 
+verify_sha256() {
+    local path="$1"
+    local expected_sha256="$2"
+    local label="$3"
+    local actual_sha256
+
+    actual_sha256="$(shasum -a 256 "$path" | awk '{print $1}')"
+    if [ "$actual_sha256" != "$expected_sha256" ]; then
+        printf 'Hash mismatch for %s\n' "$label" >&2
+        printf 'Expected: %s\nActual:   %s\n' "$expected_sha256" "$actual_sha256" >&2
+        return 1
+    fi
+}
+
 extract_npm_file() {
     local package_name="$1"
     local version="$2"
@@ -63,7 +77,6 @@ extract_npm_file() {
     local archive_path="$CACHE_DIR/${package_name}-${version}.tgz"
     local archive_url="https://registry.npmjs.org/${package_name}/-/${package_name}-${version}.tgz"
     local temp_dir
-    local actual_sha256
 
     mkdir -p "$CACHE_DIR"
 
@@ -75,11 +88,9 @@ extract_npm_file() {
     tar -xzf "$archive_path" -C "$temp_dir" "$archive_member"
 
     if [ -n "$expected_sha256" ]; then
-        actual_sha256="$(shasum -a 256 "$temp_dir/$archive_member" | awk '{print $1}')"
-        if [ "$actual_sha256" != "$expected_sha256" ]; then
+        if ! verify_sha256 "$temp_dir/$archive_member" "$expected_sha256" "$package_name@$version ($archive_member)"; then
             rm -f "$archive_path"
             rm -rf "$temp_dir"
-            printf 'Hash mismatch for %s@%s (%s)\n' "$package_name" "$version" "$archive_member" >&2
             exit 1
         fi
     fi
