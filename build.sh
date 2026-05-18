@@ -19,20 +19,25 @@ ARCHIVE_PATH="$DIST_DIR/$ARCHIVE_NAME"
 ICON_SOURCE="$SCRIPT_DIR/assets/mdviewer.svg"
 ICON_NAME="AppIcon"
 ICON_PATH="$RESOURCES_DIR/$ICON_NAME.icns"
+NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-https://edgeinternal1uhg.optum.com/artifactory/api/npm/glb-npm-vir}"
 
 MARKED_VERSION="17.0.4"
+MARKED_TARBALL_SHA256="651ab10bab456da22585aca676075c9cefcfd8e65aca64a94a33d5bdd3054ce9"
 MARKED_FILE="package/lib/marked.umd.js"
 MARKED_SHA256="7e70d262692cda5ef9556bbe304a9fc2b3b9ca48e114688e5601eac6baac584a"
 
 DOMPURIFY_VERSION="3.3.2"
+DOMPURIFY_TARBALL_SHA256="42348e94cf0a139776f5e32940cac9ea420e7b3c6453783cc3b24ea388c0c270"
 DOMPURIFY_FILE="package/dist/purify.min.js"
 DOMPURIFY_SHA256="d448d28fdc0e16a906823f0f4db4688288c159bf6b82dc37a48949db4231d380"
 
 MERMAID_VERSION="11.14.0"
+MERMAID_TARBALL_SHA256="63ba06649e17e10fee02e54c7c2edacfe250b4bbddb3c2497f00d3a32a42e5c7"
 MERMAID_FILE="package/dist/mermaid.min.js"
 MERMAID_SHA256="217b66ef4279c33c141b4afe22effad10a91c02558dc70917be2c0981e78ed87"
 
 KATEX_VERSION="0.16.45"
+KATEX_TARBALL_SHA256="cbd8ffa29008d7a4de4bb2c198716f284677f962967df6e70a69dffdc14001ae"
 KATEX_CSS_SHA256="23aefa0850248a16478b9f55d6b67028f74cc0b46b82b24dc22af068acaa4170"
 KATEX_JS_SHA256="e1c5d9e1b5b906881c40faf67950585a3f5d5adb4636d10e9678b9ba74b57dcc"
 KATEX_AUTO_RENDER_SHA256="e5372d199bcdae8b4de71d0f7ceba72a4ba12774a27c60a6f1f77d03b3228ee4"
@@ -68,21 +73,39 @@ verify_sha256() {
     fi
 }
 
+ensure_npm_archive() {
+    local package_name="$1"
+    local version="$2"
+    local archive_path="$3"
+    local expected_sha256="$4"
+
+    mkdir -p "$CACHE_DIR"
+
+    if [ ! -f "$archive_path" ]; then
+        npm pack "$package_name@$version" \
+            --registry="${NPM_REGISTRY_URL%/}/" \
+            --pack-destination "$CACHE_DIR" \
+            --ignore-scripts \
+            >/dev/null
+    fi
+
+    if ! verify_sha256 "$archive_path" "$expected_sha256" "$package_name@$version archive"; then
+        rm -f "$archive_path"
+        exit 1
+    fi
+}
+
 extract_npm_file() {
     local package_name="$1"
     local version="$2"
     local archive_member="$3"
     local destination="$4"
     local expected_sha256="${5:-}"
+    local expected_archive_sha256="$6"
     local archive_path="$CACHE_DIR/${package_name}-${version}.tgz"
-    local archive_url="https://registry.npmjs.org/${package_name}/-/${package_name}-${version}.tgz"
     local temp_dir
 
-    mkdir -p "$CACHE_DIR"
-
-    if [ ! -f "$archive_path" ]; then
-        curl -fsSL "$archive_url" -o "$archive_path"
-    fi
+    ensure_npm_archive "$package_name" "$version" "$archive_path" "$expected_archive_sha256"
 
     temp_dir="$(mktemp -d)"
     tar -xzf "$archive_path" -C "$temp_dir" "$archive_member"
@@ -104,15 +127,11 @@ extract_npm_dir() {
     local version="$2"
     local archive_member="$3"
     local destination="$4"
+    local expected_archive_sha256="$5"
     local archive_path="$CACHE_DIR/${package_name}-${version}.tgz"
-    local archive_url="https://registry.npmjs.org/${package_name}/-/${package_name}-${version}.tgz"
     local temp_dir
 
-    mkdir -p "$CACHE_DIR"
-
-    if [ ! -f "$archive_path" ]; then
-        curl -fsSL "$archive_url" -o "$archive_path"
-    fi
+    ensure_npm_archive "$package_name" "$version" "$archive_path" "$expected_archive_sha256"
 
     temp_dir="$(mktemp -d)"
     tar -xzf "$archive_path" -C "$temp_dir" "$archive_member"
@@ -126,9 +145,9 @@ SDK_PATH=""
 prepare_environment() {
     require_command bash
     require_command clang
-    require_command curl
     require_command ditto
     require_command iconutil
+    require_command npm
     require_command plutil
     require_command sips
     require_command xcrun
@@ -251,17 +270,17 @@ build_bundle() {
     cp "$SRC_DIR/viewer.js" "$RESOURCES_DIR/viewer.js"
     cp "$SCRIPT_DIR/LICENSE" "$RESOURCES_DIR/LICENSE"
 
-    extract_npm_file "marked" "$MARKED_VERSION" "$MARKED_FILE" "$VENDOR_DIR/marked.umd.js" "$MARKED_SHA256"
-    extract_npm_file "marked" "$MARKED_VERSION" "package/LICENSE.md" "$LICENSES_DIR/marked-LICENSE.md"
-    extract_npm_file "dompurify" "$DOMPURIFY_VERSION" "$DOMPURIFY_FILE" "$VENDOR_DIR/purify.min.js" "$DOMPURIFY_SHA256"
-    extract_npm_file "dompurify" "$DOMPURIFY_VERSION" "package/LICENSE" "$LICENSES_DIR/dompurify-LICENSE"
-    extract_npm_file "mermaid" "$MERMAID_VERSION" "$MERMAID_FILE" "$VENDOR_DIR/mermaid.min.js" "$MERMAID_SHA256"
-    extract_npm_file "mermaid" "$MERMAID_VERSION" "package/LICENSE" "$LICENSES_DIR/mermaid-LICENSE"
-    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/katex.min.css" "$VENDOR_DIR/katex.min.css" "$KATEX_CSS_SHA256"
-    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/katex.min.js" "$VENDOR_DIR/katex.min.js" "$KATEX_JS_SHA256"
-    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/contrib/auto-render.min.js" "$VENDOR_DIR/katex-auto-render.min.js" "$KATEX_AUTO_RENDER_SHA256"
-    extract_npm_dir "katex" "$KATEX_VERSION" "package/dist/fonts" "$VENDOR_DIR/fonts"
-    extract_npm_file "katex" "$KATEX_VERSION" "package/LICENSE" "$LICENSES_DIR/katex-LICENSE"
+    extract_npm_file "marked" "$MARKED_VERSION" "$MARKED_FILE" "$VENDOR_DIR/marked.umd.js" "$MARKED_SHA256" "$MARKED_TARBALL_SHA256"
+    extract_npm_file "marked" "$MARKED_VERSION" "package/LICENSE.md" "$LICENSES_DIR/marked-LICENSE.md" "" "$MARKED_TARBALL_SHA256"
+    extract_npm_file "dompurify" "$DOMPURIFY_VERSION" "$DOMPURIFY_FILE" "$VENDOR_DIR/purify.min.js" "$DOMPURIFY_SHA256" "$DOMPURIFY_TARBALL_SHA256"
+    extract_npm_file "dompurify" "$DOMPURIFY_VERSION" "package/LICENSE" "$LICENSES_DIR/dompurify-LICENSE" "" "$DOMPURIFY_TARBALL_SHA256"
+    extract_npm_file "mermaid" "$MERMAID_VERSION" "$MERMAID_FILE" "$VENDOR_DIR/mermaid.min.js" "$MERMAID_SHA256" "$MERMAID_TARBALL_SHA256"
+    extract_npm_file "mermaid" "$MERMAID_VERSION" "package/LICENSE" "$LICENSES_DIR/mermaid-LICENSE" "" "$MERMAID_TARBALL_SHA256"
+    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/katex.min.css" "$VENDOR_DIR/katex.min.css" "$KATEX_CSS_SHA256" "$KATEX_TARBALL_SHA256"
+    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/katex.min.js" "$VENDOR_DIR/katex.min.js" "$KATEX_JS_SHA256" "$KATEX_TARBALL_SHA256"
+    extract_npm_file "katex" "$KATEX_VERSION" "package/dist/contrib/auto-render.min.js" "$VENDOR_DIR/katex-auto-render.min.js" "$KATEX_AUTO_RENDER_SHA256" "$KATEX_TARBALL_SHA256"
+    extract_npm_dir "katex" "$KATEX_VERSION" "package/dist/fonts" "$VENDOR_DIR/fonts" "$KATEX_TARBALL_SHA256"
+    extract_npm_file "katex" "$KATEX_VERSION" "package/LICENSE" "$LICENSES_DIR/katex-LICENSE" "" "$KATEX_TARBALL_SHA256"
 
     chmod 755 "$RESOURCES_DIR/MarkdownViewer.sh"
     plutil -lint "$CONTENTS_DIR/Info.plist" >/dev/null

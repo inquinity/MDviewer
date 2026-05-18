@@ -9,13 +9,14 @@
 - Narrowed `WKWebView` file read access from `/` to the generated preview directory.
 - Tightened preview CSP to block remote HTTP/HTTPS image and media loads from Markdown.
 - Added URL scheme allowlisting for clicked Markdown links.
-- Refactored build hash verification through a single helper for clearer failure behavior.
+- Switched build-time npm package downloads to `npm pack --ignore-scripts` against the authenticated UHG Artifactory npm virtual registry.
+- Added archive-level SHA-256 verification for pinned npm tarballs in addition to runtime asset hashes.
 
 ## Verification Notes
 
 - Static verification only.
 - No app launch, install, dependency install, package script, or build execution was performed.
-- Fetching pinned npm tarballs to compute complete archive hashes failed because `registry.npmjs.org` could not be resolved from this environment.
+- Pinned npm tarballs were fetched through Artifactory with `npm pack --ignore-scripts`; no package scripts were executed.
 
 ## Rollback
 

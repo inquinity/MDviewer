@@ -73,6 +73,8 @@ cd mdviewer
 
 Requires Xcode Command Line Tools (`xcode-select --install`).
 
+Builds download pinned renderer assets with `npm pack --ignore-scripts` from the configured npm registry. By default, `build.sh` uses the authenticated UHG Artifactory npm virtual registry at `https://edgeinternal1uhg.optum.com/artifactory/api/npm/glb-npm-vir`; set `NPM_REGISTRY_URL` to override it.
+
 ## Keyboard Shortcuts
 
 | Action | Shortcut |
