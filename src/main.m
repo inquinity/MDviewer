@@ -1050,9 +1050,12 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     SEL action = item.action;
 
     if (action == @selector(openDocument:) ||
-        action == @selector(showAboutPanel:) ||
-        action == @selector(checkForUpdates:)) {
+        action == @selector(showAboutPanel:)) {
         return YES;
+    }
+
+    if (action == @selector(checkForUpdates:)) {
+        return NO;
     }
 
     MDVPreviewWindowController *controller = [self currentPreviewWindowController];
