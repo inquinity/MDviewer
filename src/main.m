@@ -1049,7 +1049,9 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
 
-    if (action == @selector(openDocument:) || action == @selector(checkForUpdates:)) {
+    if (action == @selector(openDocument:) ||
+        action == @selector(showAboutPanel:) ||
+        action == @selector(checkForUpdates:)) {
         return YES;
     }
 
