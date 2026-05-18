@@ -825,7 +825,7 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 }
 
 - (void)showAboutPanel:(id)sender {
-    NSAttributedString *credits = [[NSAttributedString alloc] initWithString:@"Modified for Security Review"];
+    NSAttributedString *credits = [[NSAttributedString alloc] initWithString:@"Modified for security compliance"];
     [NSApp orderFrontStandardAboutPanelWithOptions:@{NSAboutPanelOptionCredits: credits}];
 }
 
