@@ -669,9 +669,9 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 
     NSMenu *appMenu = [[NSMenu alloc] initWithTitle:appName];
     NSMenuItem *aboutItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"About %@", appName]
-                                                       action:@selector(orderFrontStandardAboutPanel:)
+                                                       action:@selector(showAboutPanel:)
                                                 keyEquivalent:@""];
-    aboutItem.target = NSApp;
+    aboutItem.target = self;
     [appMenu addItem:aboutItem];
     [appMenu addItem:[self menuItemWithTitle:@"Check for Updates..."
                                       action:@selector(checkForUpdates:)
@@ -822,6 +822,11 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     item.target = nil;
     item.keyEquivalentModifierMask = modifierMask;
     return item;
+}
+
+- (void)showAboutPanel:(id)sender {
+    NSAttributedString *credits = [[NSAttributedString alloc] initWithString:@"Modified for Security Review"];
+    [NSApp orderFrontStandardAboutPanelWithOptions:@{NSAboutPanelOptionCredits: credits}];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
