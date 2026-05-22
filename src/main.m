@@ -636,9 +636,10 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 
 @end
 
-@interface MDVAppDelegate : NSObject <NSApplicationDelegate, NSUserInterfaceValidations>
+@interface MDVAppDelegate : NSObject <NSApplicationDelegate, NSUserInterfaceValidations, NSMenuDelegate>
 
 @property(nonatomic, strong) NSMutableSet<MDVPreviewWindowController *> *windowControllers;
+@property(nonatomic, strong) NSMenu *openRecentMenu;
 @property(nonatomic, assign) BOOL openedFileDuringLaunch;
 
 @end
@@ -715,6 +716,11 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
                                        action:@selector(openDocument:)
                                  keyEquivalent:@"o"
                              modifierMask:NSEventModifierFlagCommand]];
+    NSMenuItem *openRecentItem = [[NSMenuItem alloc] initWithTitle:@"Open Recent" action:nil keyEquivalent:@""];
+    self.openRecentMenu = [[NSMenu alloc] initWithTitle:@"Open Recent"];
+    self.openRecentMenu.delegate = self;
+    openRecentItem.submenu = self.openRecentMenu;
+    [fileMenu addItem:openRecentItem];
     [fileMenu addItem:[self menuItemWithTitle:@"Reload"
                                        action:@selector(reloadPreview:)
                                  keyEquivalent:@"r"
@@ -802,6 +808,43 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     viewMenuItem.submenu = viewMenu;
 
     [NSApp setMainMenu:mainMenu];
+}
+
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+    if (menu == self.openRecentMenu) {
+        [self rebuildOpenRecentMenu];
+    }
+}
+
+- (void)rebuildOpenRecentMenu {
+    [self.openRecentMenu removeAllItems];
+
+    NSArray<NSURL *> *recentURLs = [NSDocumentController sharedDocumentController].recentDocumentURLs;
+    if (recentURLs.count == 0) {
+        NSMenuItem *emptyItem = [[NSMenuItem alloc] initWithTitle:@"No Recent Documents" action:nil keyEquivalent:@""];
+        emptyItem.enabled = NO;
+        [self.openRecentMenu addItem:emptyItem];
+    } else {
+        for (NSURL *url in recentURLs) {
+            NSString *title = url.lastPathComponent.length > 0 ? url.lastPathComponent : url.path;
+            NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title
+                                                          action:@selector(openRecentDocument:)
+                                                   keyEquivalent:@""];
+            item.target = self;
+            item.representedObject = url;
+            item.toolTip = url.path;
+            [self.openRecentMenu addItem:item];
+        }
+    }
+
+    [self.openRecentMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *clearItem = [[NSMenuItem alloc] initWithTitle:@"Clear Menu"
+                                                       action:@selector(clearRecentDocuments:)
+                                                keyEquivalent:@""];
+    clearItem.target = self;
+    clearItem.enabled = recentURLs.count > 0;
+    [self.openRecentMenu addItem:clearItem];
 }
 
 - (NSMenuItem *)menuItemWithTitle:(NSString *)title
@@ -998,6 +1041,24 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     [self openFileURLs:panel.URLs reuseCurrentWindow:NO];
 }
 
+- (void)openRecentDocument:(id)sender {
+    if (![sender isKindOfClass:NSMenuItem.class]) {
+        return;
+    }
+
+    id representedObject = ((NSMenuItem *)sender).representedObject;
+    if (![representedObject isKindOfClass:NSURL.class]) {
+        return;
+    }
+
+    [self openFileURLs:@[(NSURL *)representedObject] reuseCurrentWindow:NO];
+}
+
+- (void)clearRecentDocuments:(id)sender {
+    [[NSDocumentController sharedDocumentController] clearRecentDocuments:sender];
+    [self rebuildOpenRecentMenu];
+}
+
 - (void)reloadPreview:(id)sender {
     [[self currentPreviewWindowController] reloadPreview:sender];
 }
@@ -1052,6 +1113,19 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     if (action == @selector(openDocument:) ||
         action == @selector(showAboutPanel:)) {
         return YES;
+    }
+
+    if (action == @selector(openRecentDocument:)) {
+        if ([(id)item isKindOfClass:NSMenuItem.class]) {
+            NSURL *url = ((NSMenuItem *)item).representedObject;
+            return [url isKindOfClass:NSURL.class] && [[NSFileManager defaultManager] fileExistsAtPath:url.path];
+        }
+
+        return NO;
+    }
+
+    if (action == @selector(clearRecentDocuments:)) {
+        return [NSDocumentController sharedDocumentController].recentDocumentURLs.count > 0;
     }
 
     if (action == @selector(checkForUpdates:)) {
