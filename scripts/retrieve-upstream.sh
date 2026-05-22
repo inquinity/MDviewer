@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Define color codes for terminal output
+COLOR_GREEN="\e[32m"         # Used for success messages and instructions
+COLOR_RED="\e[31m"           # Used for error messages and warnings
+COLOR_YELLOW="\e[33m"        # Used for help text, lists, and informational content
+COLOR_MAGENTA="\e[35m"       # Available for general use
+COLOR_CYAN="\e[36m"          # Available for general use
+COLOR_BLUE="\e[34m"          # Available for general use; does not show on screen well
+COLOR_BRIGHTYELLOW="\e[93m"  # Used for highlighting important actions and status
+COLOR_RESET="\e[0m"          # Used to reset color formatting
+
+print_colored() {
+    local color=$1
+    local message=$2
+    printf "${color}${message}${COLOR_RESET}\n"
+}
+
+remote_name="${REMOTE:-upstream}"
+remote_branch="${REMOTE_BRANCH:-}"
+
+usage() {
+    printf '%b\n' "${COLOR_YELLOW}Usage: retrieve-upstream.sh [options]${COLOR_RESET}"
+    printf '\n'
+    printf '%s\n' 'Fetch upstream commits and rebase the current branch onto the upstream branch.'
+    printf '%s\n' 'If conflicts occur, resolve them manually and run: git rebase --continue'
+    printf '\n'
+    printf '%b\n' "${COLOR_YELLOW}Options:${COLOR_RESET}"
+    printf '%s\n' '  -h, --help             Show this help text.'
+    printf '%s\n' '  -r, --remote NAME      Remote to retrieve from. Defaults to REMOTE or upstream.'
+    printf '%s\n' '  -b, --branch NAME      Remote branch to rebase onto. Defaults to REMOTE_BRANCH or remote HEAD.'
+    printf '\n'
+    printf '%b\n' "${COLOR_YELLOW}Environment:${COLOR_RESET}"
+    printf '%s\n' '  REMOTE                 Default remote name.'
+    printf '%s\n' '  REMOTE_BRANCH          Default remote branch name.'
+}
+
+die() {
+    print_colored "$COLOR_RED" "error: $*" >&2
+    exit 1
+}
+
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -r|--remote)
+                [[ $# -ge 2 ]] || die "missing value for $1"
+                remote_name="$2"
+                shift 2
+                ;;
+            -b|--branch)
+                [[ $# -ge 2 ]] || die "missing value for $1"
+                remote_branch="$2"
+                shift 2
+                ;;
+            *)
+                die "unknown option: $1"
+                ;;
+        esac
+    done
+}
+
+validate_git_context() {
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "must be run inside a Git work tree"
+    git remote get-url "$remote_name" >/dev/null 2>&1 || die "remote '$remote_name' is not configured"
+
+    if [[ -n "$(git status --porcelain)" ]]; then
+        die "working tree is not clean; commit or stash local changes before rebasing"
+    fi
+}
+
+resolve_remote_branch() {
+    local remote_head
+
+    if [[ -z "$remote_branch" ]]; then
+        remote_head="$(git symbolic-ref --quiet --short "refs/remotes/$remote_name/HEAD" 2>/dev/null || true)"
+        if [[ -n "$remote_head" ]]; then
+            remote_branch="${remote_head#"$remote_name/"}"
+        else
+            remote_branch="$(git remote show "$remote_name" | awk -F': ' '/HEAD branch/ {print $2}')"
+        fi
+    fi
+
+    [[ -n "$remote_branch" ]] || die "could not determine default branch for '$remote_name'"
+    git rev-parse --verify --quiet "$remote_name/$remote_branch" >/dev/null || die "remote branch '$remote_name/$remote_branch' was not found"
+}
+
+main() {
+    local current_branch
+
+    parse_arguments "$@"
+    validate_git_context
+
+    print_colored "$COLOR_BRIGHTYELLOW" "Fetching upstream commits..."
+    git fetch "$remote_name" --prune --tags
+
+    resolve_remote_branch
+
+    current_branch="$(git branch --show-current)"
+    [[ -n "$current_branch" ]] || die "currently in detached HEAD; switch to a branch before rebasing"
+
+    print_colored "$COLOR_BRIGHTYELLOW" "Rebasing $current_branch onto $remote_name/$remote_branch..."
+    git rebase "$remote_name/$remote_branch"
+    print_colored "$COLOR_GREEN" "Rebase completed."
+}
+
+main "$@"
