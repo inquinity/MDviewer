@@ -10,7 +10,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/JackYoung27/mdviewer/releases/latest">Download</a>
   &nbsp;&middot;&nbsp;
   <a href="#features">Features</a>
   &nbsp;&middot;&nbsp;
@@ -22,6 +21,13 @@
 <p align="center">
   <img src="./assets/demo.gif" alt="MDviewer demo" width="720">
 </p>
+
+## Security Modifications
+
+This code is a fork from https://github.com/JackYoung27/mdviewer
+
+This has been updated to address several security concerns. Changes are documented in SECURITY_REVIEW.md
+
 
 ## Why MDviewer?
 
