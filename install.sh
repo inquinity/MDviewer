@@ -85,9 +85,9 @@ def cfstr_to_python(ref):
     return buf.value.decode("utf-8")
 
 
-# --- Resolve extensions to UTIs and register as default handler ---
+# --- Resolve extensions to UTIs ---
 
-with cfstr(bundle_id) as bundle_cf, cfstr("public.filename-extension") as tag_class_cf:
+with cfstr("public.filename-extension") as tag_class_cf:
     for ext in EXTENSIONS:
         with cfstr(ext) as ext_cf:
             uti_cf = CS.UTTypeCreatePreferredIdentifierForTag(tag_class_cf, ext_cf, None)
@@ -95,23 +95,8 @@ with cfstr(bundle_id) as bundle_cf, cfstr("public.filename-extension") as tag_cl
                 CONTENT_TYPES.add(cfstr_to_python(uti_cf))
                 CF.CFRelease(uti_cf)
 
-    for ct in sorted(CONTENT_TYPES):
-        with cfstr(ct) as ct_cf:
-            status = CS.LSSetDefaultRoleHandlerForContentType(ct_cf, LS_ROLES_ALL, bundle_cf)
-            if status != 0:
-                raise RuntimeError(f"LSSetDefaultRoleHandlerForContentType failed for {ct}: {status}")
-
-            current_cf = CS.LSCopyDefaultRoleHandlerForContentType(ct_cf, LS_ROLES_ALL)
-            if not current_cf:
-                raise RuntimeError(f"Could not verify default handler for {ct}")
-
-            current = cfstr_to_python(current_cf)
-            CF.CFRelease(current_cf)
-
-            if current != bundle_id:
-                raise RuntimeError(f"Handler mismatch for {ct}: expected {bundle_id}, got {current}")
-
-            print(f"default handler set: {ct} -> {current}")
+for ct in sorted(CONTENT_TYPES):
+    print(f"registered content type: {ct}")
 
 
 # --- Update LaunchServices plist ---
