@@ -19,7 +19,12 @@ ARCHIVE_PATH="$DIST_DIR/$ARCHIVE_NAME"
 ICON_SOURCE="$SCRIPT_DIR/assets/mdviewer.svg"
 ICON_NAME="AppIcon"
 ICON_PATH="$RESOURCES_DIR/$ICON_NAME.icns"
-NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-https://edgeinternal1uhg.optum.com/artifactory/api/npm/glb-npm-vir}"
+# Get registry from ~/.npmrc if it exists, otherwise use public registry
+NPM_REGISTRY_URL=""
+if [ -f "$HOME/.npmrc" ]; then
+    NPM_REGISTRY_URL=$(grep "^registry=" "$HOME/.npmrc" | head -1 | cut -d'=' -f2)
+fi
+NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-https://registry.npmjs.org/}"
 
 MARKED_VERSION="17.0.4"
 MARKED_TARBALL_SHA256="651ab10bab456da22585aca676075c9cefcfd8e65aca64a94a33d5bdd3054ce9"
@@ -78,15 +83,15 @@ ensure_npm_archive() {
     local version="$2"
     local archive_path="$3"
     local expected_sha256="$4"
+    local registry_url="${NPM_REGISTRY_URL%/}"
 
     mkdir -p "$CACHE_DIR"
 
     if [ ! -f "$archive_path" ]; then
-        npm pack "$package_name@$version" \
-            --registry="${NPM_REGISTRY_URL%/}/" \
-            --pack-destination "$CACHE_DIR" \
-            --ignore-scripts \
-            >/dev/null
+        curl -L -f -o "$archive_path" "${registry_url}/${package_name}/-/${package_name}-${version}.tgz" || {
+            printf 'Failed to download %s@%s from %s\n' "$package_name" "$version" "$registry_url" >&2
+            exit 1
+        }
     fi
 
     if ! verify_sha256 "$archive_path" "$expected_sha256" "$package_name@$version archive"; then
@@ -145,9 +150,9 @@ SDK_PATH=""
 prepare_environment() {
     require_command bash
     require_command clang
+    require_command curl
     require_command ditto
     require_command iconutil
-    require_command npm
     require_command plutil
     require_command sips
     require_command xcrun
