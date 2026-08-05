@@ -21,10 +21,21 @@ ICON_NAME="AppIcon"
 ICON_PATH="$RESOURCES_DIR/$ICON_NAME.icns"
 # Get registry from ~/.npmrc if it exists, otherwise use public registry
 NPM_REGISTRY_URL=""
+NPM_AUTH_TOKEN=""
 if [ -f "$HOME/.npmrc" ]; then
     NPM_REGISTRY_URL=$(grep "^registry=" "$HOME/.npmrc" | head -1 | cut -d'=' -f2)
 fi
 NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-https://registry.npmjs.org/}"
+# Force https: an http registry that redirects to https causes curl to drop
+# the Authorization header on the scheme-change redirect, turning an
+# authenticated request into an anonymous (401) one.
+NPM_REGISTRY_URL="$(printf '%s' "$NPM_REGISTRY_URL" | sed -E 's#^http://#https://#')"
+
+# Pick up the matching _authToken for that registry (npmrc keys tokens by host+path, no scheme)
+if [ -f "$HOME/.npmrc" ]; then
+    NPM_REGISTRY_HOST_PATH="$(printf '%s' "$NPM_REGISTRY_URL" | sed -E 's#^https?://##')"
+    NPM_AUTH_TOKEN=$(grep -F "//${NPM_REGISTRY_HOST_PATH}:_authToken=" "$HOME/.npmrc" | head -1 | cut -d'=' -f2-)
+fi
 
 MARKED_VERSION="17.0.4"
 MARKED_TARBALL_SHA256="651ab10bab456da22585aca676075c9cefcfd8e65aca64a94a33d5bdd3054ce9"
@@ -88,7 +99,11 @@ ensure_npm_archive() {
     mkdir -p "$CACHE_DIR"
 
     if [ ! -f "$archive_path" ]; then
-        curl -L -f -o "$archive_path" "${registry_url}/${package_name}/-/${package_name}-${version}.tgz" || {
+        local curl_auth_args=()
+        if [ -n "$NPM_AUTH_TOKEN" ]; then
+            curl_auth_args=(-H "Authorization: Bearer $NPM_AUTH_TOKEN")
+        fi
+        curl -L -f "${curl_auth_args[@]}" -o "$archive_path" "${registry_url}/${package_name}/-/${package_name}-${version}.tgz" || {
             printf 'Failed to download %s@%s from %s\n' "$package_name" "$version" "$registry_url" >&2
             exit 1
         }
