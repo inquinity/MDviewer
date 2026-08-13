@@ -2,14 +2,11 @@
 set -euo pipefail
 
 # Define color codes for terminal output
-COLOR_GREEN="\e[32m"         # Used for success messages and instructions
-COLOR_RED="\e[31m"           # Used for error messages and warnings
-COLOR_YELLOW="\e[33m"        # Used for help text, lists, and informational content
-COLOR_MAGENTA="\e[35m"       # Available for general use
-COLOR_CYAN="\e[36m"          # Available for general use
-COLOR_BLUE="\e[34m"          # Available for general use; does not show on screen well
-COLOR_BRIGHTYELLOW="\e[93m"  # Used for highlighting important actions and status
-COLOR_RESET="\e[0m"          # Used to reset color formatting
+COLOR_GREEN="\e[32m"
+COLOR_RED="\e[31m"
+COLOR_YELLOW="\e[33m"
+COLOR_BRIGHTYELLOW="\e[93m"
+COLOR_RESET="\e[0m"
 
 print_colored() {
     local color=$1
@@ -19,21 +16,19 @@ print_colored() {
 
 remote_name="${REMOTE:-upstream}"
 remote_branch="${REMOTE_BRANCH:-}"
+upstream_url="${UPSTREAM_URL:-https://github.com/JackYoung27/MDviewer.git}"
 
 usage() {
     printf '%b\n' "${COLOR_YELLOW}Usage: retrieve-upstream.sh [options]${COLOR_RESET}"
     printf '\n'
-    printf '%s\n' 'Fetch upstream commits and rebase the current branch onto the upstream branch.'
+    printf '%s\n' 'Configure upstream remote (if needed) and rebase the current branch onto it.'
     printf '%s\n' 'If conflicts occur, resolve them manually and run: git rebase --continue'
     printf '\n'
     printf '%b\n' "${COLOR_YELLOW}Options:${COLOR_RESET}"
     printf '%s\n' '  -h, --help             Show this help text.'
-    printf '%s\n' '  -r, --remote NAME      Remote to retrieve from. Defaults to REMOTE or upstream.'
+    printf '%s\n' '  -r, --remote NAME      Remote name. Defaults to REMOTE or upstream.'
+    printf '%s\n' '  -u, --url URL          Upstream repository URL.'
     printf '%s\n' '  -b, --branch NAME      Remote branch to rebase onto. Defaults to REMOTE_BRANCH or remote HEAD.'
-    printf '\n'
-    printf '%b\n' "${COLOR_YELLOW}Environment:${COLOR_RESET}"
-    printf '%s\n' '  REMOTE                 Default remote name.'
-    printf '%s\n' '  REMOTE_BRANCH          Default remote branch name.'
 }
 
 die() {
@@ -53,6 +48,11 @@ parse_arguments() {
                 remote_name="$2"
                 shift 2
                 ;;
+            -u|--url)
+                [[ $# -ge 2 ]] || die "missing value for $1"
+                upstream_url="$2"
+                shift 2
+                ;;
             -b|--branch)
                 [[ $# -ge 2 ]] || die "missing value for $1"
                 remote_branch="$2"
@@ -65,9 +65,22 @@ parse_arguments() {
     done
 }
 
+ensure_upstream_remote() {
+    if git remote get-url "$remote_name" >/dev/null 2>&1; then
+        local existing_url
+        existing_url=$(git remote get-url "$remote_name")
+        if [[ "$existing_url" != "$upstream_url" ]]; then
+            print_colored "$COLOR_BRIGHTYELLOW" "Updating remote '$remote_name' to: $upstream_url"
+            git remote set-url "$remote_name" "$upstream_url"
+        fi
+    else
+        print_colored "$COLOR_BRIGHTYELLOW" "Adding remote '$remote_name': $upstream_url"
+        git remote add "$remote_name" "$upstream_url"
+    fi
+}
+
 validate_git_context() {
     git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "must be run inside a Git work tree"
-    git remote get-url "$remote_name" >/dev/null 2>&1 || die "remote '$remote_name' is not configured"
 
     if [[ -n "$(git status --porcelain)" ]]; then
         die "working tree is not clean; commit or stash local changes before rebasing"
@@ -95,6 +108,7 @@ main() {
 
     parse_arguments "$@"
     validate_git_context
+    ensure_upstream_remote
 
     print_colored "$COLOR_BRIGHTYELLOW" "Fetching upstream commits..."
     git fetch "$remote_name" --prune --tags
@@ -106,7 +120,8 @@ main() {
 
     print_colored "$COLOR_BRIGHTYELLOW" "Rebasing $current_branch onto $remote_name/$remote_branch..."
     git rebase "$remote_name/$remote_branch"
-    print_colored "$COLOR_GREEN" "Rebase completed."
+    print_colored "$COLOR_GREEN" "Rebase completed successfully!"
+    print_colored "$COLOR_YELLOW" "The upstream remote '$remote_name' has been left in place for future updates."
 }
 
 main "$@"
