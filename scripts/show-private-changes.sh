@@ -16,7 +16,7 @@ print_colored() {
 usage() {
     printf '%b\n' "${COLOR_YELLOW}Usage: show-private-changes.sh [options]${COLOR_RESET}"
     printf '\n'
-    printf '%s\n' 'Display changes in origin/main that are not in upstream/main.'
+    printf '%s\n' 'Display all local changes (HEAD) that are not in upstream/main.'
     printf '%s\n' 'These are the private customizations that should NOT be contributed upstream.'
     printf '\n'
     printf '%b\n' "${COLOR_YELLOW}Options:${COLOR_RESET}"
@@ -55,21 +55,19 @@ done
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "must be run inside a Git work tree"
 git remote get-url upstream >/dev/null 2>&1 || die "upstream remote is not configured"
-git remote get-url origin >/dev/null 2>&1 || die "origin remote is not configured"
 
-print_colored "$COLOR_BRIGHTYELLOW" "Fetching remotes..."
+print_colored "$COLOR_BRIGHTYELLOW" "Fetching upstream..."
 git fetch upstream main >/dev/null 2>&1
-git fetch origin main >/dev/null 2>&1
 
-print_colored "$COLOR_YELLOW" "Private changes in origin/main (not in upstream/main):"
+print_colored "$COLOR_YELLOW" "Private changes in HEAD (not in upstream/main):"
 printf '\n'
 
 if [[ "$show_commits" == "true" ]]; then
     print_colored "$COLOR_YELLOW" "Commits:"
-    git log --oneline upstream/main..origin/main
+    git log --oneline upstream/main..HEAD
 elif [[ "$show_stat" == "true" ]]; then
     print_colored "$COLOR_YELLOW" "Changed files summary:"
-    git diff --stat upstream/main..origin/main
+    git diff --stat upstream/main..HEAD
 else
-    git diff upstream/main..origin/main
+    git diff upstream/main..HEAD
 fi
